@@ -25,9 +25,9 @@ from pathlib import Path
 import mujoco
 import numpy as np
 
-MENAGERIE_PATH = Path(
-    os.environ.get("MUJOCO_MENAGERIE_PATH", r"C:\Users\Shen\projects\mujoco_menagerie")
-)
+# Default: a mujoco_menagerie checkout beside this repo. Override with MUJOCO_MENAGERIE_PATH.
+_DEFAULT_MENAGERIE = Path(__file__).resolve().parents[2] / "mujoco_menagerie"
+MENAGERIE_PATH = Path(os.environ.get("MUJOCO_MENAGERIE_PATH", _DEFAULT_MENAGERIE))
 PANDA_XML = MENAGERIE_PATH / "franka_emika_panda" / "panda.xml"
 
 RENDER_W, RENDER_H = 960, 720
