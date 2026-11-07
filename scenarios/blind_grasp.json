@@ -1,0 +1,11 @@
+{
+  "name": "blind_grasp",
+  "title": "Chapter 3: the object tracker goes dark and the cube moves",
+  "task": "Put the red cube in the green target zone.",
+  "triggers": [
+    {"when": {"type": "tool_call", "tool": "move_ee", "n": 1, "phase": "after"},
+     "sabotage": {"kind": "cut_object_sensor"}},
+    {"when": {"type": "tool_call", "tool": "move_ee", "n": 1, "phase": "after"},
+     "sabotage": {"kind": "teleport_cube", "delta": [0.08, 0.12, 0.0]}}
+  ]
+}

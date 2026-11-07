@@ -1,0 +1,785 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sabotage demo · live</title>
+<!-- Builder C. Self-contained: no CDN, no external fonts. Served by sim_server at "/".
+     Trace styling mirrors sabotage_demo/video.py (format_tool_call / format_tool_result). -->
+<style>
+  :root {
+    --bg: #0a0d12;
+    --panel: #10151c;
+    --panel-2: #0c1016;
+    --border: #222a34;
+    --border-2: #2d3643;
+    --text: #c9d1d9;
+    --bright: #f0f6fc;
+    --dim: #7d8590;
+    --dimmer: #5a636e;
+    --accent: #58a6ff;
+    --tool: #e3b341;
+    --args: #79c0ff;
+    --result: #6e7681;
+    --error: #f0883e;
+    --sab: #ff5f5f;
+    --sab-bg: #c4162a;
+    --ok: #3fb950;
+    --fail: #f85149;
+    --claim: #d2a8ff;
+    --think: #8b949e;
+    --mono: "Cascadia Mono", "Cascadia Code", Consolas, "SFMono-Regular", Menlo, "DejaVu Sans Mono", monospace;
+    --ui: "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
+    --radius: 10px;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font: 14px/1.45 var(--ui);
+    -webkit-font-smoothing: antialiased;
+    overflow: hidden;
+  }
+  .app { display: grid; grid-template-rows: 78px minmax(0, 1fr); height: 100vh; }
+
+  /* ---------------------------------------------------------------- header */
+  header {
+    display: flex; align-items: center; gap: 24px;
+    padding: 0 22px 0 0;
+    background: #080b0f;
+    border-bottom: 1px solid var(--border);
+    min-width: 0;
+  }
+  .brand { display: flex; align-items: stretch; gap: 16px; min-width: 0; flex: 1; height: 100%; }
+  .brand .bar { width: 5px; background: var(--accent); flex: none; }
+  .brand .txt { display: flex; flex-direction: column; justify-content: center; min-width: 0; }
+  .kicker { font: 600 11px/1 var(--ui); letter-spacing: .16em; color: var(--dim); text-transform: uppercase; }
+  h1 {
+    margin: 6px 0 4px; font: 600 21px/1.15 var(--ui); color: var(--bright);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .task { font-size: 13px; color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; height: 18px; }
+  .stats { display: flex; gap: 28px; align-items: center; flex: none; }
+  .stat { text-align: right; min-width: 74px; }
+  .stat .lbl { font: 600 10px/1 var(--ui); letter-spacing: .14em; color: var(--dim); text-transform: uppercase; }
+  .stat .val { font: 700 20px/1.2 var(--mono); color: var(--bright); font-variant-numeric: tabular-nums; margin-top: 5px; }
+  .conn {
+    display: inline-flex; align-items: center; gap: 8px; height: 30px; padding: 0 12px;
+    border-radius: 999px; border: 1px solid var(--border-2); background: var(--panel);
+    font: 700 11px/1 var(--ui); letter-spacing: .12em; color: var(--dim); min-width: 132px; justify-content: center;
+  }
+  .conn .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--dimmer); }
+  .conn.live { color: #aff5b4; border-color: #1f6f3a; }
+  .conn.live .dot { background: var(--ok); box-shadow: 0 0 0 0 rgba(63,185,80,.7); animation: pulse 1.6s infinite; }
+  .conn.polling { color: #f6d58b; border-color: #6b5417; }
+  .conn.polling .dot { background: var(--tool); }
+  .conn.offline { color: #ffb3ad; border-color: #7a2621; }
+  .conn.offline .dot { background: var(--fail); }
+  @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(63,185,80,.6);} 70% { box-shadow: 0 0 0 8px rgba(63,185,80,0);} 100% { box-shadow: 0 0 0 0 rgba(63,185,80,0);} }
+
+  /* ---------------------------------------------------------------- layout */
+  main {
+    display: grid; gap: 16px; padding: 16px;
+    grid-template-columns: minmax(0, 1fr) clamp(360px, 31vw, 520px);
+    min-height: 0;
+  }
+  .left { display: grid; grid-template-rows: minmax(0, 1fr) auto; gap: 16px; min-height: 0; min-width: 0; }
+  .card {
+    background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius);
+    min-width: 0;
+  }
+  .card-h {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    padding: 12px 16px 10px; border-bottom: 1px solid var(--border);
+    font: 600 11px/1 var(--ui); letter-spacing: .16em; color: var(--dim); text-transform: uppercase;
+  }
+  .card-h .aux { font: 500 12px/1 var(--mono); letter-spacing: 0; text-transform: none; color: var(--dimmer); }
+
+  /* ---------------------------------------------------------------- viewport */
+  .viewport {
+    position: relative; min-height: 0; overflow: hidden;
+    background: #000; border: 1px solid var(--border); border-radius: var(--radius);
+    display: flex; align-items: center; justify-content: center;
+  }
+  .stage { position: relative; height: 100%; max-width: 100%; aspect-ratio: 4 / 3; }
+  .stage img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; display: block; background: #05070a; }
+  .placeholder {
+    position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+    color: var(--dimmer); font: 500 14px var(--ui); letter-spacing: .04em;
+  }
+  .hud {
+    position: absolute; left: 12px; bottom: 12px; display: flex; gap: 6px;
+    font: 600 12px/1 var(--mono); color: #e6edf3;
+  }
+  .hud span { background: rgba(5, 8, 12, .72); border: 1px solid rgba(255,255,255,.08); padding: 6px 8px; border-radius: 6px; font-variant-numeric: tabular-nums; }
+  .chips { position: absolute; left: 12px; top: 12px; display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
+  .chip {
+    background: rgba(190, 24, 40, .92); color: #fff; font: 600 13px/1 var(--ui);
+    padding: 7px 11px; border-radius: 999px; box-shadow: 0 2px 10px rgba(0,0,0,.35);
+  }
+  .chip b { font-weight: 800; letter-spacing: .08em; margin-right: 6px; }
+  .banner {
+    position: absolute; left: 0; right: 0; top: 50%; transform: translateY(-50%) scaleY(0);
+    height: 21%; min-height: 90px; display: flex; flex-direction: column; align-items: center; justify-content: center;
+    color: #fff; pointer-events: none; opacity: 0;
+    background:
+      repeating-linear-gradient(-45deg, #14080a 0 10px, transparent 10px 22px) top / 100% 10px no-repeat,
+      repeating-linear-gradient(-45deg, #14080a 0 10px, transparent 10px 22px) bottom / 100% 10px no-repeat,
+      rgba(196, 22, 42, .92);
+  }
+  .banner .big { font: 900 clamp(28px, 4.2vw, 54px)/1 var(--ui); letter-spacing: .2em; padding-left: .2em; }
+  .banner .small { font: 600 clamp(15px, 1.7vw, 24px)/1.2 var(--ui); margin-top: 8px; }
+  .banner.show { animation: banner-in .14s ease-out forwards, flash .5s steps(1) 4; }
+  .viewport.alarm { animation: border-flash .5s steps(1) 4; }
+  @keyframes banner-in { to { transform: translateY(-50%) scaleY(1); opacity: 1; } }
+  @keyframes flash { 0% { background-color: rgba(196,22,42,.94); } 50% { background-color: rgba(150,16,32,.66); } }
+  @keyframes border-flash { 0% { box-shadow: inset 0 0 0 5px #e61e2d; border-color: #e61e2d; } 50% { box-shadow: none; } }
+  .stamp {
+    position: absolute; left: 50%; top: 50%; pointer-events: none;
+    transform: translate(-50%, -50%) rotate(-6deg) scale(1.6); opacity: 0;
+    padding: 14px 30px; border: 6px solid currentColor; border-radius: 14px;
+    font: 900 clamp(26px, 4vw, 56px)/1 var(--ui); letter-spacing: .06em; white-space: nowrap;
+    background: rgba(8, 12, 10, .6); box-shadow: inset 0 0 0 3px rgba(0,0,0,.25);
+  }
+  .stamp.ok { color: #2ecc5c; }
+  .stamp.bad { color: #f03c3c; }
+  .stamp.show { animation: stamp-in .22s cubic-bezier(.2,.9,.3,1.3) forwards; }
+  @keyframes stamp-in { to { transform: translate(-50%, -50%) rotate(-6deg) scale(1); opacity: 1; } }
+
+  /* ---------------------------------------------------------------- controls row */
+  .controls { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 16px; }
+  .state-body { padding: 10px 16px 14px; display: grid; grid-template-columns: 92px minmax(0, 1fr); row-gap: 7px; column-gap: 12px; }
+  .state-body .k { font: 600 10.5px/22px var(--ui); letter-spacing: .12em; color: var(--dim); text-transform: uppercase; }
+  .state-body .v {
+    font: 500 13.5px/22px var(--mono); color: var(--bright); font-variant-numeric: tabular-nums;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; height: 22px;
+  }
+  .v .muted { color: var(--dim); }
+  .v .dead { color: #fff; background: var(--sab-bg); padding: 2px 8px; border-radius: 5px; font: 800 12px/1 var(--ui); letter-spacing: .1em; }
+  .pill { display: inline-block; padding: 3px 8px; border-radius: 999px; font: 700 11px/1 var(--ui); letter-spacing: .08em; vertical-align: 1px; }
+  .pill.hold { background: rgba(63,185,80,.16); color: #7ee38f; border: 1px solid rgba(63,185,80,.45); }
+  .pill.nohold { background: rgba(125,133,144,.12); color: var(--dim); border: 1px solid var(--border-2); }
+  .fault { color: #fff; background: rgba(196,22,42,.9); padding: 2px 8px; border-radius: 5px; margin-right: 6px; font: 600 12px/1 var(--ui); }
+  .joints { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; }
+  .joint {
+    font: 600 11.5px/20px var(--mono); text-align: center; color: var(--text);
+    background: var(--panel-2); border: 1px solid var(--border); border-radius: 5px; height: 22px;
+    font-variant-numeric: tabular-nums; overflow: hidden;
+  }
+  .joint.frozen { background: rgba(196,22,42,.85); border-color: #ff6b6b; color: #fff; }
+
+  .sab-body { padding: 12px 16px 14px; display: grid; gap: 9px; }
+  .row { display: flex; gap: 8px; align-items: center; }
+  select, button { font: 600 13px/1 var(--ui); height: 36px; border-radius: 8px; }
+  select {
+    background: var(--panel-2); color: var(--bright); border: 1px solid var(--border-2);
+    padding: 0 10px; width: 112px; flex: none;
+  }
+  button {
+    flex: 1; cursor: pointer; color: #ffe9e9; padding: 0 14px; text-align: left;
+    background: linear-gradient(#3a1418, #2c0f13); border: 1px solid #6e1f27;
+    transition: background .12s, border-color .12s, transform .06s;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  button:hover { background: linear-gradient(#531a20, #3d1218); border-color: #a3303b; }
+  button:active { transform: translateY(1px); }
+  button:disabled { opacity: .55; cursor: progress; }
+  button .ico { display: inline-block; width: 18px; color: #ff8f8f; }
+  button.neutral { color: var(--text); background: linear-gradient(#1a212b, #151b23); border-color: var(--border-2); }
+  button.neutral:hover { background: linear-gradient(#222b37, #1a212b); border-color: #3d4856; }
+  button.neutral .ico { color: var(--dim); }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  /* ---------------------------------------------------------------- feed */
+  .feed { display: flex; flex-direction: column; min-height: 0; position: relative; }
+  .feed-scroll {
+    flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden;
+    padding: 8px 14px 16px 16px; font: 13px/1.5 var(--mono);
+    scrollbar-width: thin; scrollbar-color: #2d3643 transparent;
+  }
+  .feed-scroll::-webkit-scrollbar { width: 8px; }
+  .feed-scroll::-webkit-scrollbar-thumb { background: #2d3643; border-radius: 8px; }
+  .e { white-space: pre-wrap; overflow-wrap: anywhere; margin-top: 8px; position: relative; padding-left: 10px; }
+  .e .p { font-weight: 700; }
+  .e.run_start { color: var(--text); margin-top: 2px; }
+  .e.run_start .p { color: var(--dim); }
+  .e.agent_text { color: #ecf2f8; margin-top: 12px; }
+  .e.agent_text::before, .e.agent_thinking::before {
+    content: ""; position: absolute; left: 0; top: 3px; bottom: 3px; width: 3px; border-radius: 2px; background: var(--accent);
+  }
+  .e.agent_thinking { color: var(--think); font-style: italic; margin-top: 10px; }
+  .e.agent_thinking::before { background: #3c424c; }
+  .e.tool_call { color: var(--args); margin-top: 10px; padding-left: 2.6em; text-indent: -2.6em; }
+  .e.tool_call .p { color: var(--tool); }
+  .e.tool_result { color: var(--result); margin-top: 1px; padding-left: 2.6em; text-indent: -2.6em; }
+  .e.tool_result.err { color: var(--error); }
+  .e.sabotage { color: var(--sab); font-weight: 700; margin-top: 12px; }
+  .e.sabotage .p { letter-spacing: .02em; }
+  .e.outcome { color: var(--claim); margin-top: 12px; }
+  .e.judge { font-weight: 700; margin-top: 12px; }
+  .e.judge.ok { color: var(--ok); }
+  .e.judge.bad { color: var(--fail); }
+  .e.run_end { color: var(--dim); margin-top: 10px; }
+  .e.fresh { animation: fresh 1.2s ease-out; }
+  @keyframes fresh { from { background: rgba(88,166,255,.10); } to { background: transparent; } }
+  .empty { color: var(--dimmer); font: 500 13px var(--ui); padding: 18px 2px; }
+  .jump {
+    position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%);
+    flex: none; width: auto; height: 30px; padding: 0 14px; border-radius: 999px; text-align: center;
+    background: #1f6feb; border: 1px solid #388bfd; color: #fff; font: 600 12px/1 var(--ui);
+    box-shadow: 0 4px 16px rgba(0,0,0,.45); display: none;
+  }
+  .jump:hover { background: #2f7cf6; border-color: #58a6ff; }
+  .jump.show { display: block; }
+
+  /* ---------------------------------------------------------------- toasts */
+  .toasts { position: fixed; right: 20px; bottom: 20px; display: flex; flex-direction: column; gap: 10px; z-index: 10; pointer-events: none; }
+  .toast {
+    width: 340px; background: #151b23; border: 1px solid var(--border-2); border-left: 4px solid var(--ok);
+    border-radius: 8px; padding: 11px 14px; box-shadow: 0 10px 30px rgba(0,0,0,.5);
+    animation: toast-in .18s ease-out; pointer-events: auto;
+  }
+  .toast.fail { border-left-color: var(--fail); }
+  .toast .t { font: 600 13.5px/1.3 var(--ui); color: var(--bright); }
+  .toast .d { font: 12.5px/1.4 var(--mono); color: var(--dim); margin-top: 4px; overflow-wrap: anywhere; }
+  .toast.out { animation: toast-out .22s ease-in forwards; }
+  @keyframes toast-in { from { transform: translateX(24px); opacity: 0; } }
+  @keyframes toast-out { to { transform: translateX(24px); opacity: 0; } }
+
+  @media (max-width: 1100px) {
+    body { overflow: auto; }
+    .app { height: auto; min-height: 100vh; }
+    main { grid-template-columns: 1fr; }
+    .left { grid-template-rows: auto auto; }
+    .viewport { aspect-ratio: 4 / 3; }
+    .feed { height: 70vh; }
+    .stats .stat.opt { display: none; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <div class="brand">
+      <div class="bar"></div>
+      <div class="txt">
+        <div class="kicker">Sabotage demo · live</div>
+        <h1 id="title">Connecting…</h1>
+        <div class="task" id="task"></div>
+      </div>
+    </div>
+    <div class="stats">
+      <div class="stat"><div class="lbl">Sim time</div><div class="val" id="simTime">–</div></div>
+      <div class="stat"><div class="lbl">Tool calls</div><div class="val" id="toolCount">0</div></div>
+      <div class="stat opt"><div class="lbl">Frames/s</div><div class="val" id="fps">–</div></div>
+      <div class="conn offline" id="conn"><span class="dot"></span><span id="connText">OFFLINE</span></div>
+    </div>
+  </header>
+
+  <main>
+    <section class="left">
+      <div class="viewport" id="viewport">
+        <div class="stage">
+          <img id="frame" alt="Live view from the front camera">
+          <div class="placeholder" id="placeholder">Waiting for frames…</div>
+          <div class="chips" id="chips"></div>
+          <div class="banner" id="banner"><div class="big">SABOTAGE</div><div class="small" id="bannerLabel"></div></div>
+          <div class="stamp" id="stamp"></div>
+          <div class="hud"><span id="hudFrame">frame –</span><span id="hudTime">t –</span></div>
+        </div>
+      </div>
+
+      <div class="controls">
+        <div class="card">
+          <div class="card-h"><span>Robot state</span><span class="aux" id="stateAge">–</span></div>
+          <div class="state-body">
+            <div class="k">Sim time</div><div class="v" id="sSim">–</div>
+            <div class="k">TCP</div><div class="v" id="sTcp">–</div>
+            <div class="k">Gripper</div><div class="v" id="sGrip">–</div>
+            <div class="k">Cube</div><div class="v" id="sCube">–</div>
+            <div class="k">Joints</div><div class="v"><div class="joints" id="sJoints"></div></div>
+            <div class="k">Faults</div><div class="v" id="sFaults"><span class="muted">none</span></div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-h"><span>Sabotage</span><span class="aux">POST /sabotage</span></div>
+          <div class="sab-body">
+            <div class="row">
+              <select id="jointSel" aria-label="Joint to freeze">
+                <option value="0" selected>joint 1</option><option value="1">joint 2</option><option value="2">joint 3</option>
+                <option value="3">joint 4</option><option value="4">joint 5</option><option value="5">joint 6</option>
+                <option value="6">joint 7</option>
+              </select>
+              <button data-action="freeze"><span class="ico">✱</span>Freeze joint</button>
+            </div>
+            <div class="row"><button data-action="cut"><span class="ico">✕</span>Cut object tracker</button></div>
+            <div class="row"><button data-action="teleport"><span class="ico">↗</span>Teleport cube (+15 cm y)</button></div>
+            <div class="row"><button data-action="clear" class="neutral"><span class="ico">↺</span>Clear faults</button></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="card feed">
+      <div class="card-h"><span>Agent trace</span><span class="aux" id="feedCount">0 events</span></div>
+      <div class="feed-scroll" id="feed"><div class="empty" id="feedEmpty">No events yet. The trace fills in as the agent works.</div></div>
+      <button class="jump" id="jump">↓ new events</button>
+    </section>
+  </main>
+</div>
+<div class="toasts" id="toasts" aria-live="polite"></div>
+
+<script>
+(() => {
+  "use strict";
+  const $ = (id) => document.getElementById(id);
+  const MAX_FEED = 800;
+  const S = {
+    ws: null, wsLive: false, backoff: 1000, reconnectTimer: null,
+    pollFrameTimer: null, pollEventsTimer: null, nextSince: 0,
+    seen: new Set(), toolCalls: 0, events: 0,
+    runTitle: null, scenarioName: null, frameTimes: [], objectUrl: null,
+    lastStateOk: 0, serverUp: false, stickBottom: true, unseen: 0,
+  };
+
+  // ------------------------------------------------------------ formatting (mirrors video.py)
+  const shortTool = (n) => String(n == null ? "?" : n).replace(/^(mcp__[a-z0-9_-]+__|\/)/, "");
+  function fmtNum(v) {
+    if (typeof v === "boolean") return v ? "true" : "false";
+    if (Number.isInteger(v)) return String(v);
+    let s = Number(v).toFixed(3).replace(/0+$/, "");
+    if (s.endsWith(".")) s += "0";
+    return s === "-0.0" ? "0.0" : s;
+  }
+  function fmtVal(v, maxStr = 48) {
+    if (v === null || v === undefined) return "null";
+    if (typeof v === "number" || typeof v === "boolean") return fmtNum(v);
+    if (Array.isArray(v)) return "[" + v.map((x) => fmtVal(x, maxStr)).join(",") + "]";
+    if (typeof v === "object") return "{" + Object.entries(v).map(([k, x]) => k + ":" + fmtVal(x, maxStr)).join(",") + "}";
+    let s = String(v).replace(/\n/g, " ");
+    if (s.length > maxStr) s = s.slice(0, maxStr - 1) + "…";
+    return (s.includes(" ") || !s) ? `"${s}"` : s;
+  }
+  function formatToolCall(tool, args) {
+    const parts = [];
+    if (args && typeof args === "object" && !Array.isArray(args)) {
+      for (const [k, v] of Object.entries(args)) {
+        if (v === null || v === undefined) continue;
+        if (Array.isArray(v) && v.length === 0) continue;
+        if (typeof v === "object" && !Array.isArray(v) && Object.keys(v).length === 0) continue;
+        parts.push(`${k}=${fmtVal(v)}`);
+      }
+    }
+    return { prefix: "> " + shortTool(tool), body: parts.length ? " " + parts.join(" ") : "" };
+  }
+  const m = (v) => (typeof v === "number" ? v.toFixed(3) + "m" : String(v));
+  function formatToolResult(tool, result) {
+    if (typeof result === "string") {
+      try { result = JSON.parse(result); } catch (e) { return ["← " + result.replace(/\n/g, " ").slice(0, 120), false]; }
+    }
+    if (!result || typeof result !== "object" || Array.isArray(result)) return ["← " + fmtVal(result), false];
+    if (result.error) return ["← error: " + String(result.error).trim(), true];
+    if (result.image === true) return ["← image" + (result.camera ? " camera=" + result.camera : ""), false];
+    const p = [];
+    if ("reached" in result) {
+      p.push(result.reached ? "reached" : "NOT reached");
+      if (result.final_error_m != null) p.push("err=" + m(result.final_error_m));
+      if (!result.reached && result.note) p.push(String(result.note));
+    }
+    if ("opening_m" in result) p.push("opening=" + m(result.opening_m));
+    if ("success" in result) {
+      p.push("success=" + fmtNum(!!result.success));
+      if (result.xy_distance_m != null) p.push("dist=" + m(result.xy_distance_m));
+      if (!result.success && result.reason) p.push(String(result.reason));
+    }
+    if ("found" in result) {
+      p.push("found=" + fmtNum(!!result.found));
+      if (result.pos != null) p.push("pos=" + fmtVal(result.pos));
+      if (result.confidence != null) p.push("conf=" + Number(result.confidence).toFixed(2));
+    }
+    if (result.tcp && typeof result.tcp === "object" && "objects" in result) {
+      p.push("tcp=" + fmtVal(result.tcp.pos));
+      const g = result.gripper || {};
+      if ("holding" in g) p.push("holding=" + fmtNum(!!g.holding));
+      const cube = (result.objects || {}).cube;
+      p.push(cube && typeof cube === "object" ? "cube=" + fmtVal(cube.pos) : "cube=null (tracker dead)");
+    } else if ("holding" in result) {
+      p.push("holding=" + fmtNum(!!result.holding));
+    }
+    if (typeof result.summary === "string") p.push(result.summary);
+    if (!p.length && typeof result.text === "string") p.push(`scene description (${result.text.length} chars)`);
+    if (!p.length && "ok" in result) p.push(result.ok ? "ok" : "not ok");
+    if (!p.length && "sim_time" in result) p.push("t=" + Number(result.sim_time).toFixed(2) + "s");
+    if (!p.length) {
+      for (const [k, v] of Object.entries(result)) {
+        if (["boolean", "number", "string"].includes(typeof v) && p.length < 3) p.push(`${k}=${fmtVal(v, 32)}`);
+      }
+    }
+    return ["← " + p.join(" "), false];
+  }
+  function sabotageLabel(p) {
+    if (p && p.label) return String(p.label);
+    const spec = (p && p.spec) || {};
+    switch (spec.kind) {
+      case "freeze_joint": return `Joint ${Number(spec.joint || 0) + 1} frozen`;
+      case "cut_object_sensor": return "Object tracker cut";
+      case "teleport_cube":
+        if (Array.isArray(spec.delta)) return `Cube teleported ${Math.round(Math.hypot(...spec.delta) * 100)} cm`;
+        return "Cube teleported";
+      case "clear": return "Faults cleared";
+      default: return String(spec.kind || "sabotage");
+    }
+  }
+  function faultName(name) {
+    const s = String(name);
+    let mm = s.match(/^freeze_joint:(\d+)$/);
+    if (mm) return `Joint ${Number(mm[1]) + 1} frozen`;
+    if (s.startsWith("cut_object_sensor")) return "Object tracker cut";
+    return s;
+  }
+  function cleanAgentText(s, limit) {
+    s = String(s || "").replace(/\r/g, "").replace(/\*\*/g, "").replace(/`/g, "").replace(/\n{3,}/g, "\n\n").trim();
+    return s.length > limit ? s.slice(0, limit - 1).trimEnd() + "…" : s;
+  }
+
+  // event -> {cls, prefix, body} (same text as the video trace)
+  function entryFor(ev) {
+    const p = ev.payload || {};
+    switch (ev.type) {
+      case "run_start": return { cls: "run_start", prefix: "TASK", body: " " + (p.task || "") };
+      case "agent_text": { const t = cleanAgentText(p.text, 2000); return t ? { cls: "agent_text", prefix: "", body: t } : null; }
+      case "agent_thinking": { const t = cleanAgentText(p.text, 600); return t ? { cls: "agent_thinking", prefix: "", body: t } : null; }
+      case "tool_call": { const f = formatToolCall(p.tool, p.args); return { cls: "tool_call", prefix: f.prefix, body: f.body }; }
+      case "tool_result": { const [t, err] = formatToolResult(p.tool, p.result); return { cls: "tool_result" + (err ? " err" : ""), prefix: "", body: t }; }
+      case "sabotage":
+        if ((p.spec || {}).kind === "clear") return { cls: "sabotage", prefix: "!!", body: " faults cleared" };
+        return { cls: "sabotage", prefix: "!! SABOTAGE (hidden from agent)", body: " " + sabotageLabel(p) };
+      case "outcome": {
+        const summ = String(p.summary || "").trim();
+        if (p.status === "none") return { cls: "outcome", prefix: "NO CLAIM", body: summ ? ": " + summ : "" };
+        return { cls: "outcome", prefix: "AGENT CLAIMS", body: ` ${p.status || "?"}` + (summ ? ": " + summ : "") };
+      }
+      case "judge": {
+        const ok = !!p.success, d = p.detail || {};
+        let extra = d.xy_distance_m != null ? ` · cube ${Number(d.xy_distance_m).toFixed(3)} m from zone centre` : "";
+        if (!ok && d.reason) extra += " · " + d.reason;
+        return { cls: "judge " + (ok ? "ok" : "bad"), prefix: "JUDGE", body: (ok ? " TASK VERIFIED" : " TASK FAILED") + extra };
+      }
+      case "run_end": {
+        const parts = ["run end"];
+        if (p.tool_calls != null) parts.push(`${p.tool_calls} tool calls`);
+        if (p.sim_time != null) parts.push(`sim ${Number(p.sim_time).toFixed(1)} s`);
+        if (p.wall_s != null) parts.push(`wall ${Math.round(Number(p.wall_s))} s`);
+        return { cls: "run_end", prefix: "", body: parts.join(" · ") };
+      }
+      default: return null;
+    }
+  }
+
+  // ------------------------------------------------------------ feed
+  const feed = $("feed");
+  feed.addEventListener("scroll", () => {
+    S.stickBottom = feed.scrollHeight - feed.scrollTop - feed.clientHeight < 48;
+    if (S.stickBottom) { S.unseen = 0; $("jump").classList.remove("show"); }
+  });
+  $("jump").addEventListener("click", () => { feed.scrollTop = feed.scrollHeight; });
+
+  function addEvent(ev) {
+    if (!ev || typeof ev !== "object") return;
+    if (typeof ev.seq === "number") {
+      if (S.seen.has(ev.seq)) return;
+      S.seen.add(ev.seq);
+      S.nextSince = Math.max(S.nextSince, ev.seq + 1);
+    }
+    S.events += 1;
+    const p = ev.payload || {};
+    if (ev.type === "run_start") {
+      S.runTitle = p.title || p.scenario || null;
+      S.toolCalls = 0;
+      $("task").textContent = p.task || "";
+      clearStamp();
+      renderTitle();
+    } else if (ev.type === "tool_call") {
+      S.toolCalls += 1;
+    } else if (ev.type === "sabotage" && (p.spec || {}).kind !== "clear") {
+      flashBanner(sabotageLabel(p));
+    } else if (ev.type === "judge") {
+      showStamp(!!p.success);
+    }
+    $("toolCount").textContent = S.toolCalls;
+    if (typeof ev.sim_time === "number") $("simTime").textContent = ev.sim_time.toFixed(2);
+
+    const e = entryFor(ev);
+    if (!e) return;
+    const empty = $("feedEmpty");
+    if (empty) empty.remove();
+    const div = document.createElement("div");
+    div.className = "e fresh " + e.cls;
+    if (typeof ev.sim_time === "number") div.title = `seq ${ev.seq} · t=${ev.sim_time.toFixed(2)} s`;
+    if (e.prefix) {
+      const sp = document.createElement("span");
+      sp.className = "p";
+      sp.textContent = e.prefix;
+      div.appendChild(sp);
+    }
+    div.appendChild(document.createTextNode(e.body));
+    const stick = S.stickBottom;
+    feed.appendChild(div);
+    while (feed.childElementCount > MAX_FEED) feed.firstElementChild.remove();
+    $("feedCount").textContent = `${S.events} events`;
+    if (stick) feed.scrollTop = feed.scrollHeight;
+    else { S.unseen += 1; $("jump").textContent = `↓ ${S.unseen} new event${S.unseen > 1 ? "s" : ""}`; $("jump").classList.add("show"); }
+  }
+
+  // ------------------------------------------------------------ overlays
+  let bannerTimer = null;
+  function flashBanner(label) {
+    const b = $("banner"), vp = $("viewport");
+    $("bannerLabel").textContent = label;
+    b.classList.remove("show"); vp.classList.remove("alarm");
+    void b.offsetWidth; // restart the animation
+    b.classList.add("show"); vp.classList.add("alarm");
+    clearTimeout(bannerTimer);
+    bannerTimer = setTimeout(() => { b.classList.remove("show"); vp.classList.remove("alarm"); }, 2000);
+  }
+  function showStamp(ok) {
+    const st = $("stamp");
+    st.textContent = ok ? "TASK VERIFIED" : "TASK FAILED";
+    st.className = "stamp " + (ok ? "ok" : "bad");
+    void st.offsetWidth;
+    st.classList.add("show");
+  }
+  function clearStamp() { $("stamp").className = "stamp"; }
+
+  // ------------------------------------------------------------ frames
+  const img = $("frame");
+  function noteFrame(index, simTime) {
+    $("placeholder").style.display = "none";
+    if (index != null) $("hudFrame").textContent = "frame " + index;
+    if (simTime != null && !Number.isNaN(Number(simTime))) {
+      $("hudTime").textContent = "t " + Number(simTime).toFixed(2) + " s";
+      $("simTime").textContent = Number(simTime).toFixed(2);
+    }
+    const now = performance.now();
+    S.frameTimes.push(now);
+    while (S.frameTimes.length && now - S.frameTimes[0] > 2000) S.frameTimes.shift();
+  }
+  setInterval(() => {
+    const now = performance.now();
+    while (S.frameTimes.length && now - S.frameTimes[0] > 2000) S.frameTimes.shift();
+    $("fps").textContent = (S.frameTimes.length / 2).toFixed(1);
+  }, 500);
+
+  function showFrameB64(msg) {
+    img.src = "data:image/jpeg;base64," + msg.jpeg_b64;
+    noteFrame(msg.index, msg.sim_time);
+  }
+
+  let pollingFrame = false;
+  async function pollFrame() {
+    if (pollingFrame) return;
+    pollingFrame = true;
+    try {
+      const r = await fetch("/frames/latest.jpg?t=" + Date.now(), { cache: "no-store" });
+      if (!r.ok) return;
+      const idx = r.headers.get("X-Frame-Index"), t = r.headers.get("X-Sim-Time");
+      const blob = await r.blob();
+      const url = URL.createObjectURL(blob);
+      img.src = url;
+      if (S.objectUrl) URL.revokeObjectURL(S.objectUrl);
+      S.objectUrl = url;
+      noteFrame(idx, t);
+    } catch (e) { /* server unreachable: state poll reports it */ }
+    finally { pollingFrame = false; }
+  }
+  async function pollEvents() {
+    try {
+      const r = await fetch(`/events?since=${S.nextSince}`, { cache: "no-store" });
+      if (!r.ok) return;
+      const data = await r.json();
+      (data.events || []).forEach(addEvent);
+      if (typeof data.next === "number") S.nextSince = Math.max(S.nextSince, data.next);
+    } catch (e) { /* ignore */ }
+  }
+  function startPolling() {
+    if (!S.pollFrameTimer) { S.pollFrameTimer = setInterval(pollFrame, 500); pollFrame(); }
+    if (!S.pollEventsTimer) { S.pollEventsTimer = setInterval(pollEvents, 1000); pollEvents(); }
+  }
+  function stopPolling() {
+    clearInterval(S.pollFrameTimer); clearInterval(S.pollEventsTimer);
+    S.pollFrameTimer = S.pollEventsTimer = null;
+  }
+
+  // ------------------------------------------------------------ websocket
+  function setConn() {
+    const c = $("conn");
+    let cls = "offline", txt = "OFFLINE";
+    if (S.wsLive) { cls = "live"; txt = "LIVE"; }
+    else if (S.serverUp) { cls = "polling"; txt = "POLLING"; }
+    c.className = "conn " + cls;
+    $("connText").textContent = txt;
+  }
+  function connect() {
+    clearTimeout(S.reconnectTimer);
+    const proto = location.protocol === "https:" ? "wss" : "ws";
+    let ws;
+    try { ws = new WebSocket(`${proto}://${location.host}/ws`); }
+    catch (e) { scheduleReconnect(); return; }
+    S.ws = ws;
+    ws.onopen = () => { S.wsLive = true; S.serverUp = true; S.backoff = 1000; stopPolling(); setConn(); };
+    ws.onmessage = (m) => {
+      let msg;
+      try { msg = JSON.parse(m.data); } catch (e) { return; }
+      if (msg.kind === "frame" && msg.jpeg_b64) showFrameB64(msg);
+      else if (msg.kind === "event") { const { kind, ...ev } = msg; addEvent(ev); }
+    };
+    ws.onclose = () => {
+      if (S.ws !== ws) return;
+      S.wsLive = false; S.ws = null; setConn();
+      startPolling();
+      scheduleReconnect();
+    };
+    ws.onerror = () => { try { ws.close(); } catch (e) { /* ignore */ } };
+  }
+  function scheduleReconnect() {
+    clearTimeout(S.reconnectTimer);
+    S.reconnectTimer = setTimeout(connect, S.backoff);
+    S.backoff = Math.min(S.backoff * 2, 8000);
+  }
+
+  // ------------------------------------------------------------ state + health
+  const fmtVec = (v, d = 3) => Array.isArray(v) ? "[" + v.map((x) => Number(x).toFixed(d)).join(", ") + "]" : "–";
+  const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+  const jointsEl = $("sJoints");
+  for (let i = 0; i < 7; i++) {
+    const j = document.createElement("div");
+    j.className = "joint"; j.textContent = "–"; j.title = "joint" + (i + 1);
+    jointsEl.appendChild(j);
+  }
+  function renderState(st) {
+    $("sSim").textContent = typeof st.sim_time === "number" ? st.sim_time.toFixed(2) + " s" : "–";
+    if (typeof st.sim_time === "number") $("simTime").textContent = st.sim_time.toFixed(2);
+    $("sTcp").textContent = fmtVec((st.tcp || {}).pos);
+    const g = st.gripper || {};
+    $("sGrip").innerHTML =
+      `${typeof g.opening_m === "number" ? g.opening_m.toFixed(3) + " m" : "–"} <span class="muted">${esc(g.target || "")}</span> ` +
+      (g.holding ? '<span class="pill hold">HOLDING</span>' : '<span class="pill nohold">EMPTY</span>');
+    const objs = st.objects || {};
+    const dead = (st.sensors || {}).object_tracker === "dead" || objs.cube === null;
+    $("sCube").innerHTML = dead ? '<span class="dead">TRACKER DEAD</span>' : esc(fmtVec((objs.cube || {}).pos));
+    const faults = Array.isArray(st.active_faults) ? st.active_faults : [];
+    $("sFaults").innerHTML = faults.length ? faults.map((f) => `<span class="fault">${esc(faultName(f))}</span>`).join("") : '<span class="muted">none</span>';
+    const frozen = new Set(faults.map((f) => (String(f).match(/^freeze_joint:(\d+)$/) || [])[1]).filter((x) => x != null).map(Number));
+    const pos = ((st.joints || {}).pos) || [];
+    Array.from(jointsEl.children).forEach((el, i) => {
+      el.textContent = typeof pos[i] === "number" ? pos[i].toFixed(2) : "–";
+      el.classList.toggle("frozen", frozen.has(i));
+      el.title = `joint${i + 1}${frozen.has(i) ? " (frozen)" : ""}`;
+    });
+    const chips = $("chips");
+    const want = faults.map(faultName).join("|");
+    if (chips.dataset.k !== want) {
+      chips.dataset.k = want;
+      chips.innerHTML = faults.map((f) => `<div class="chip"><b>FAULT</b>${esc(faultName(f))}</div>`).join("");
+    }
+  }
+  let stateBusy = false;
+  async function pollState() {
+    if (stateBusy) return;
+    stateBusy = true;
+    try {
+      const r = await fetch("/state", { cache: "no-store" });
+      if (!r.ok) throw new Error("HTTP " + r.status);
+      renderState(await r.json());
+      S.lastStateOk = Date.now();
+      S.serverUp = true;
+    } catch (e) {
+      if (Date.now() - S.lastStateOk > 3000) { S.serverUp = false; }
+    } finally {
+      stateBusy = false;
+      setConn();
+    }
+  }
+  setInterval(() => {
+    $("stateAge").textContent = S.lastStateOk ? `${((Date.now() - S.lastStateOk) / 1000).toFixed(0)} s ago` : "–";
+  }, 1000);
+  function renderTitle() {
+    const t = S.runTitle || S.scenarioName || "Sabotage demo";
+    $("title").textContent = t;
+    document.title = t + " · live";
+  }
+  async function pollHealth() {
+    try {
+      const r = await fetch("/health", { cache: "no-store" });
+      const h = await r.json();
+      if (h && h.scenario) { S.scenarioName = String(h.scenario); renderTitle(); }
+    } catch (e) {
+      if (!S.runTitle && !S.scenarioName) $("title").textContent = "Simulator unreachable";
+    }
+  }
+
+  // ------------------------------------------------------------ sabotage buttons
+  function toast(kind, title, detail) {
+    const t = document.createElement("div");
+    t.className = "toast" + (kind === "fail" ? " fail" : "");
+    t.setAttribute("role", kind === "fail" ? "alert" : "status");
+    t.innerHTML = `<div class="t">${esc(title)}</div>` + (detail ? `<div class="d">${esc(detail)}</div>` : "");
+    const box = $("toasts");
+    box.appendChild(t);
+    while (box.childElementCount > 4) box.firstElementChild.remove();
+    setTimeout(() => { t.classList.add("out"); setTimeout(() => t.remove(), 260); }, kind === "fail" ? 5000 : 3200);
+  }
+  async function postJson(path, body) {
+    const r = await fetch(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body || {}) });
+    let data = {};
+    try { data = await r.json(); } catch (e) { /* non-JSON */ }
+    if (!r.ok || data.ok === false) {
+      const err = new Error(data.error || data.detail || `HTTP ${r.status}`);
+      err.status = r.status;
+      throw err;
+    }
+    return data;
+  }
+  const ACTIONS = {
+    freeze: () => { const j = Number($("jointSel").value); return { label: `Freeze joint ${j + 1}`, spec: { kind: "freeze_joint", joint: j } }; },
+    cut: () => ({ label: "Cut object tracker", spec: { kind: "cut_object_sensor" } }),
+    teleport: () => ({ label: "Teleport cube +15 cm y", spec: { kind: "teleport_cube", delta: [0.0, 0.15, 0.0] } }),
+    clear: () => ({ label: "Clear faults", spec: { kind: "clear" } }),
+  };
+  document.querySelectorAll("button[data-action]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const { label, spec } = ACTIONS[btn.dataset.action]();
+      btn.disabled = true;
+      try {
+        let data;
+        try { data = await postJson("/sabotage", spec); }
+        catch (e) {
+          if (spec.kind === "clear" && (e.status === 400 || e.status === 404 || e.status === 422)) data = await postJson("/sabotage/clear", {});
+          else throw e;
+        }
+        const active = Array.isArray(data.active) ? data.active.map(faultName) : null;
+        toast("ok", label, active ? (active.length ? "active: " + active.join(", ") : "no active faults") : "ok");
+        pollState();
+      } catch (e) {
+        toast("fail", label + " failed", e.message || String(e));
+      } finally {
+        btn.disabled = false;
+      }
+    });
+  });
+
+  // ------------------------------------------------------------ boot
+  setConn();
+  pollHealth();
+  pollState();
+  setInterval(pollState, 1000);
+  setInterval(pollHealth, 5000);
+  connect();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,7 @@
+.venv/
+__pycache__/
+runs/*/frames/
+output/*.mp4
+.review/
+.integration/
+*.zip

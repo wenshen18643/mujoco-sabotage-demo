@@ -1,0 +1,9 @@
+{
+  "name": "fake_frozen_joint",
+  "title": "TEST ONLY: fake simulator, joint index 3 freezes before the 2nd move_ee",
+  "task": "Put the red cube in the green target zone.",
+  "triggers": [
+    {"when": {"type": "tool_call", "tool": "move_ee", "n": 2, "phase": "before"},
+     "sabotage": {"kind": "freeze_joint", "joint": 3}}
+  ]
+}

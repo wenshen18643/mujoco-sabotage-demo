@@ -1,0 +1,7 @@
+{
+  "name": "fake_cube_in_zone",
+  "title": "TEST ONLY: fake simulator, cube already in the zone (short verification run)",
+  "task": "Put the red cube in the green target zone.",
+  "fake_initial": {"cube_pos": [0.5, -0.25, 0.02]},
+  "triggers": []
+}

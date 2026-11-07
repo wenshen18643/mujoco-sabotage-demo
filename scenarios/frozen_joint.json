@@ -1,0 +1,9 @@
+{
+  "name": "frozen_joint",
+  "title": "Chapter 2: a joint dies mid-task",
+  "task": "Put the red cube in the green target zone.",
+  "triggers": [
+    {"when": {"type": "tool_call", "tool": "move_ee", "n": 2, "phase": "before"},
+     "sabotage": {"kind": "freeze_joint", "joint": 0}}
+  ]
+}

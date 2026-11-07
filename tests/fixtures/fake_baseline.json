@@ -1,0 +1,6 @@
+{
+  "name": "fake_baseline",
+  "title": "TEST ONLY: fake simulator, no faults",
+  "task": "Put the red cube in the green target zone.",
+  "triggers": []
+}
