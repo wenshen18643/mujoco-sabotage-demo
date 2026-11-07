@@ -1,0 +1,21 @@
+{
+  "name": "moved_cube",
+  "title": "Chapter 4: the cube moves mid-reach",
+  "task": "Put the red cube in the green target zone.",
+  "triggers": [
+    {
+      "when": {
+        "type": "ee_near_cube",
+        "dist": 0.06
+      },
+      "sabotage": {
+        "kind": "teleport_cube",
+        "delta": [
+          0.0,
+          0.15,
+          0.0
+        ]
+      }
+    }
+  ]
+}

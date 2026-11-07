@@ -1,0 +1,1 @@
+sim_server: scenario=frozen_joint run_dir=runs\20261107_101509_frozen_joint url=http://127.0.0.1:8765

@@ -1,0 +1,1 @@
+sim_server: scenario=blind_grasp run_dir=runs\20261107_101645_blind_grasp url=http://127.0.0.1:8765

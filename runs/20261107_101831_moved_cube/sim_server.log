@@ -1,0 +1,1 @@
+sim_server: scenario=moved_cube run_dir=runs\20261107_101831_moved_cube url=http://127.0.0.1:8765
